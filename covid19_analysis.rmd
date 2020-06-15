@@ -1,0 +1,46 @@
+---
+title: "第二回レポート"
+author: "竹下泰玄"
+date: "6/15/2020"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(tidyr)
+library(purrr)
+```
+## 日本の新型コロナウィルスの可視化・分析単位の比較
+### 行政単位がいい場合
+- どの地方自治体がどれだけPCR検査を実施しているかを分析し、自治体による対応の程度を知りたい場合。
+- リモート教育がどれだけ行なわれているかを計測する場合、居住地と登校先が大きく離れている可能性を考
+慮すると学校の所在する行政単位での集計が適切。
+
+### メッシュ単位がいい場合
+- 感染者の分布を可視化する場合。
+
+## 新型コロナウイルスの都道府県別感染者の分析
+データセットは、<https://github.com/kaz-ogiwara/covid19/tree/master/data>内のprefectures.csvを用いる。
+```{r echo=FALSE}
+data = read.delim("prefectures.csv", header=T, sep=",")%>%filter(month==6, date==14)
+```
+
+本レポートでは、都道府県ごとの感染者数、及び死亡率を以下のように定義する。
+
+- 感染者率: 都道府県内で検査を行なった内、陽性だった割合
+- 死亡率: 陽性反応が確認されたうち、すでに死亡した割合
+
+```{r}
+ratio_calc_result = mutate(data, positiveRatio=testedPositive/peopleTested)%>%mutate(deathsRatio=deaths/testedPositive)%>%select(prefectureNameJ, positiveRatio, deathsRatio)%>%replace_na(list(positiveRatio=0))%>%replace_na(list(deathsRatio=0))
+ratio_calc_result
+```
+
+変動係数を用いて、陽性反応の検出率の地域差を計算する。
+```{r}
+ratio_list = apply(as.matrix(ratio_calc_result["positiveRatio"], nrow(ratio_calc_result), 1), 1, as.numeric)
+ratio_sd = sd(ratio_list) / mean(ratio_list)
+ratio_sd
+```
