@@ -1,0 +1,289 @@
+---
+title: "r_practice_1"
+author: "Taigen Takeshita"
+date: "6/16/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, error=FALSE, message=FALSE,prompt=FALSE)
+library(spdep)
+library(sp)
+library(maptools)
+library(rgdal)
+library(sf)
+library(classInt)
+library(RColorBrewer)
+library(readr)
+library(magrittr)
+library(dplyr)
+library(kokudosuuchi)
+library(estatapi)
+library(purrr)
+library(needs)
+library(DT)
+library(gpclib)
+library(geosphere)
+library(deldir)
+# library(devtools)
+library(ggplot2)
+needs::prioritize(magrittr)
+```
+
+```{r, echo=FALSE}
+px <- runif(30,0,10)
+py <- runif(30,0,10)
+pz <- as.data.frame(px+py)
+colnames(pz) <- c("pz")
+pnt_xy <- cbind(px, py)
+pnt_sp <- SpatialPoints(data.frame(px, py))
+pnt_spdf <- SpatialPointsDataFrame(pnt_sp, pz)
+plot(pnt_spdf, cex=2, pch=19, lwd=3)
+```
+
+```{r, echo=FALSE}
+line1 <- cbind(runif(4,0,10), runif(4,0,10))
+line2 <- cbind(runif(4,0,10), runif(4,0,10))
+line3 <- cbind(runif(4,0,10), runif(4,0,10))
+line1_ln <- Lines(list(Line(line1)), "line1")
+line2_ln <- Lines(list(Line(line2)), "line2")
+line3_ln <- Lines(list(Line(line3)), "line3")
+line_sp <- SpatialLines(list(line1_ln, line2_ln, line3_ln))
+line_spdf <- SpatialLinesDataFrame(line_sp, data.frame(c(1:3), 
+              row.names=c("line1", "line2", "line3")))
+plot(line_spdf, lty=1, lwd=3)
+```
+
+```{r, echo=FALSE}
+poly1 <- cbind(c(0, 5, 5, 0, 0), c(0, 0, 5, 5, 0))
+poly2 <- cbind(c(5, 10, 10, 5, 5), c(0, 0, 5, 5, 0))
+poly3 <- cbind(c(0, 5, 5, 0, 0), c(5, 5, 10, 10, 5))
+poly4 <- cbind(c(5, 10, 10, 5, 5), c(5, 5, 10, 10, 5))
+poly1_pl <- Polygons(list(Polygon(poly1)), "poly1")
+poly2_pl <- Polygons(list(Polygon(poly2)), "poly2")
+poly3_pl <- Polygons(list(Polygon(poly3)), "poly3")
+poly4_pl <- Polygons(list(Polygon(poly4)), "poly4")
+poly_sp <- SpatialPolygons(list(poly1_pl, poly2_pl, poly3_pl, poly4_pl))
+poly_spdf <- SpatialPolygonsDataFrame(poly_sp, data.frame(c(1:4), 
+              row.names=c("poly1", "poly2", "poly3", "poly4")))
+plot(poly_spdf, col="grey")
+
+```
+
+```{r, echo=FALSE}
+grid_topo <- GridTopology(cellcentre.offset=c(1, 1), 
+                          cellsize=c(2, 2), cells.dim=c(5, 5)) 
+grid_sgdf <- SpatialGridDataFrame(grid_topo, 
+                                  data=as.data.frame(runif(25, min=1, max=50)))
+# image(grid_sgdf, col=grey((0:50)/51)) 
+# グリッドデータの面オブジェクトへの変換
+sp_grd <- as.SpatialPolygons.GridTopology(grid_topo) 
+plot(sp_grd, lwd=3)
+# text(getSpPPolygonsLabptSlots(sp_grd), 
+#     getSpPPolygonsIDSlots(sp_grd)) 
+```
+
+```{r}
+sp_spdf<- SpatialPolygonsDataFrame(sp_grd, 
+                                   data=data.frame(c(1:25),
+                                   row.names=sapply(slot(sp_grd, "polygons"), 
+                                   function(i) slot(i, "ID")))) 
+spplot(sp_spdf)
+```
+
+```{r, echo=FALSE}
+yoko <- sf::st_read("asakura_sp_data/yoko.shp")
+yoko %>%
+  st_geometry() %>%
+  plot(border="white", col="grey")
+```
+
+```{r, echo=FALSE}
+ggplot2::ggplot()+
+  ggplot2::geom_sf(data = yoko)+
+  ggplot2::geom_sf(data = st_centroid(yoko))
+```
+
+```{r, echo=FALSE}
+x <- c(5, 2, 6, 8,10)
+y <- c(6, 4,10, 0, 7)
+xy <- t(rbind(x,y))
+# 作図
+plot(xy,xlim=c(0,10),ylim=c(0,10),cex=2, pch=19)
+abline(h=0:10,v=0:10,lty=2)
+```
+
+```{r, echo=FALSE}
+##dist(xy, method="euclidean")
+##dist(xy, method="manhattan")
+```
+
+```{r, echo=FALSE}
+x <- c(139.8836, 139.0608, 139.6489, 140.1233, 139.6917, 139.6425)
+y <- c(36.56583, 36.39111, 35.85694, 35.60472, 35.68944, 35.44778)
+coords <- cbind(x, y)
+dist = 10000
+angles = seq(1,360, by=5)
+crds = list()
+for (i in 1:nrow(coords)) {
+  d = destPoint(coords[i,], angles, dist)
+  crds[[i]] = rbind(d, d[1,])
+}
+p = lapply(crds, Polygon)
+pp = list()
+for (i in 1:length(p)) pp[i] = Polygons(p[i], i)
+spdf = SpatialPolygonsDataFrame(SpatialPolygons(pp), data.frame(id=1:length(p)))
+plot(coords, xlim=c(138.5,140.5), ylim=c(35.0,37.0))
+plot(spdf, col=2, add=T)
+points(coords, pch=20)
+```
+
+```{r, echo=FALSE}
+library(deldir)
+## deldir 0.1-16
+x <- c(5, 2, 6, 8,10)
+y <- c(6, 4,10, 0, 7)
+plot(deldir(x,y), axes=FALSE, cex=3)
+```
+
+```{r}
+library(spdep)
+library(sp)
+library(maptools)
+library(classInt)
+library(rgdal)
+library(sf)
+library(spatstat)
+library(ggplot2)
+```
+
+```{r}
+px <- rnorm(500, mean=0.5, sd=0.15)
+py <- rnorm(500, mean=0.5, sd=0.15)
+# 一様分布の場合（参考）
+# px <- runif(500)
+# py <- runif(500)
+pz <- as.data.frame(rep(1, 500))
+colnames(pz) <- c("pz")
+pnt <- spatstat::ppp(px, py, c(0,1), c(0,1))
+plot(pnt, type="p")
+plot(density(pnt), 0.1)
+contour(density(pnt), add=T)
+plot(pnt, type="p", add=T)
+```
+
+```{r}
+pnt_xy <- cbind(px, py)
+pnt_sp <- SpatialPoints(data.frame(px, py))
+pnt_spdf <- SpatialPointsDataFrame(pnt_sp, pz)
+#quadratcount(pnt, nx=2, ny=2)
+#quadratcount(pnt, nx=2, ny=2)/(0.5^2)
+plot(pnt, type="p")
+plot(quadratcount(pnt, nx=2, ny=2), add=T, col="red")
+```
+
+```{r}
+#quadratcount(pnt, nx=4, ny=4)
+#quadratcount(pnt, nx=4, ny=4)/(0.25^2)
+plot(pnt, type="p")
+plot(quadratcount(pnt, nx=4, ny=4), add=T, col="red")
+```
+
+```{r}
+lph <- read.table("asakura_sp_data/lph2010.csv", sep=",", header=TRUE)
+x <- lph$Easting
+y <- lph$Northing
+z <- as.data.frame(cbind(lph$JCODE, lph$lph2010))
+colnames(z) <- c("JCODE", "lph2010")
+lph_sp <- SpatialPoints(data.frame(x, y))
+lph_spdf <- SpatialPointsDataFrame(lph_sp, z)
+yoko_spdf <- lph_spdf[lph_spdf$JCODE>14000 & lph_spdf$JCODE<14200,]
+pal0 <- c("grey80","black")
+q_lph <- classIntervals(round(yoko_spdf$lph2010/10000,1), n=4, style="fisher")
+# plot(q_lph, pal=pal0)
+q_lph_Col <- findColours(q_lph,pal0)
+plot(yoko_spdf,col=q_lph_Col, pch=20, cex=1.8, axes=TRUE, cex.axis=1.5)
+legend("topright",fill=attr(q_lph_Col,"palette"),
+       legend=names(attr(q_lph_Col,"table")), cex=1.3, bty="n")
+```
+
+```{r}
+lph$lph2010.scale <- scale(lph$lph2010)
+#summary(lph$lph2010.scale)
+
+plot(density(lph$lph2010.scale))
+# plotに日本語が表示できない場合は、例えば以下のURLを参照
+# https://qiita.com/purple_jp/items/6626ec1ea4e34c7d45b1
+```
+
+```{r, eval=FALSE}
+par(family= "IPA")
+#hist(lph$lph2010.scale, col="grey", xlim=c(-2,4), ylim=c(0,4000), breaks=48,
+     main="", xlab="標準化後の地価", ylab="頻度", cex.axis=1.3, cex.lab=1.2)
+```
+
+```{r, eval=FALSE}
+spm.shp <- sf::st_read("asakura_sp_data/tma_spm.shp")
+
+# SPMデータ（属性SPM07）を可視化する
+spm.shp[, "SPM07"]%>%
+  plot()
+
+# 地域差の検定
+# 都県別に公示地価地点データを抽出
+spm.shp$KCODE <- floor(spm.shp$ID/1000000)
+spm_11 <- spm.shp[spm.shp$KCODE==11,]
+spm_12 <- spm.shp[spm.shp$KCODE==12,]
+spm_13 <- spm.shp[spm.shp$KCODE==13,]
+spm_14 <- spm.shp[spm.shp$KCODE==14,]
+
+par(family= "HiraKakuProN-W3")
+#hist(spm_13$SPM07, col="grey", xlim=c(0.04, 0.10), ylim=c(0,25),
+#     xlab="SPM(mg/m3)", ylab="頻度", main="", cex.lab=1.2, cex.axis=1.3) 
+
+plot(ecdf(spm_13$SPM07), do.point=FALSE, verticals=TRUE, main="",
+     lwd=2, cex.axis=1.3, cex.lab=1.2)
+z <- seq(0.04, 0.09, by=0.001)
+lines(z, pnorm(z, mean=mean(spm_13$SPM07), sd=sd(spm_13$SPM07)), lty=2, lwd=2)
+
+```
+
+```{r}
+library(reldist)
+library(ineq)
+gini(lph$lph2010)
+inc <- read.table("asakura_sp_data/inc2006.csv", sep=",", header=TRUE)
+
+#library(reldist)
+gini(inc$INC2006)
+
+#library(ineq)
+inc.gini <- Lc(inc$INC2006)
+#inc.gini
+plot(inc.gini, cex.axis=1.3, cex.lab=1.2, cex.main=1.3, lwd=3)
+
+```
+
+```{r}
+
+Cv <- sd(lph$lph2010)/mean(lph$lph2010)
+Cv
+
+# 地域特化係数
+# 人口データの読み込み
+CLpop05 <- readr::read_csv("asakura_sp_data/CLpop05.csv")
+# 地域特化係数を計算
+CLpop05$pop05CL3 <- (CLpop05$POP3 / CLpop05$POP05) / (sum(CLpop05$POP3) /  sum(CLpop05$POP05))
+# 日本の都道府県行政境界データを読み込み
+jpn_pref <- sf::st_read("asakura_sp_data/jpn_pref.shp")
+# 地域特化係数を計算したデータと連結
+jpn_pref_CL <- dplyr::inner_join(jpn_pref, CLpop05, by=c("PREF_CODE"="PREFCODE" ))
+# 地域特化係数を描画
+#
+#
+ggplot2::ggplot(data = jpn_pref_CL) + 
+  geom_sf(aes(fill=pop05CL3)) + 
+  scale_fill_distiller(palette="RdYlGn") + 
+  theme_bw() +
+  labs(title = "Coefficient of regional specialization (aged over 65)")
+  ```

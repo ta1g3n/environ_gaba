@@ -1,0 +1,161 @@
+---
+title: "第4回レポート"
+author: "竹下泰玄"
+date: "6/16/2020"
+output:
+  html_document:
+    df_print: paged
+---
+## 演習
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, error=FALSE, message=FALSE,prompt=FALSE)
+library(maptools)
+library(classInt)
+library(RColorBrewer)
+library(readr)
+library(magrittr)
+library(dplyr)
+library(kokudosuuchi)
+library(estatapi)
+library(sf)
+library(purrr)
+library(needs)
+library(ggplot2)
+library(DT)
+library(readr)
+needs::prioritize(magrittr) 
+```
+
+```{r}
+d <- sf::st_read('egds_data/Mesh3_POP_14.shp')
+# 神奈川県の2020年将来人口推計データを可視化
+ggplot2::ggplot(data = d, aes(fill=POP2020)) + 
+  geom_sf() + 
+  scale_fill_distiller(palette="RdYlGn") + 
+  theme_bw() +
+  labs(title = "Population of Kanagawa in 2020 (est.)")
+```
+
+```{r}
+pal0 <- c("white","grey","grey2")
+ci <- classInt::classIntervals(d$POP2020, n=5, style = "quantile")
+ci_Col <- classInt::findColours(ci,pal0)
+plot(sf::st_geometry(d), border="grey", col="white")
+
+```
+
+```{r}
+plot(sf::st_geometry(d), border="grey" ,col=ci_Col)
+title("Population of Kanagawa in 2020 (Estimated)", cex=1.4)
+legend("topleft",fill=attr(ci_Col,"palette"), cex=0.8,
+       legend=names(attr(ci_Col,"table")),bty="n")
+```
+
+```{r}
+d %>% 
+  sf::st_geometry(d) %>% 
+  plot(col=classInt::findColours(ci, rev(RColorBrewer::brewer.pal(7, "RdYlGn"))))
+```
+
+```{r}
+d %>% 
+  sf::st_geometry(d) %>% 
+  plot(col=classInt::findColours(ci, pal0), border="grey")
+```
+
+```{r}
+yoko <- dplyr::filter(d, CITY_CODE>=14101&CITY_CODE<=14143)
+yoko %>% 
+  sf::st_geometry(yoko) %>% 
+  plot(col=classInt::findColours(ci, rev(RColorBrewer::brewer.pal(7, "RdYlGn"))))
+```
+
+```{r}
+d2 <- sf::st_read('egds_data/Mesh4_POP_14.shp')
+d2 %>% 
+  sf::st_geometry(d2) %>% 
+  plot(col=classInt::findColours(
+    classInt::classIntervals(d2$POP2020, n=5, style = "sd"), 
+    rev(RColorBrewer::brewer.pal(7, "RdYlGn"))),
+    border="grey")
+```
+
+```{r}
+rw_ln <- sf::st_read('egds_data/N02-18_RailroadSection.shp')
+ad <- sf::st_read('egds_data/N03-19_14_190101.shp')
+
+# Select Yokohama City boundary and plot it
+ad %>%
+  filter(N03_007 %in% c(14101:14118)) -> y_ad
+# Select Yokohama city: City codes is from 14101 to 14118
+y2 <- dplyr::filter(d2, CITY_CODE>=14101&CITY_CODE<=14118)
+y2 %>% 
+  sf::st_geometry(y2) %>% 
+  plot(col=classInt::findColours(
+    classInt::classIntervals(y2$POP2020, n=5, style = "sd"), 
+    rev(RColorBrewer::brewer.pal(7, "RdYlGn"))),
+    border="grey")
+
+plot(rw_ln, add=TRUE)
+title("Population of Yokohama CIty in 2020 (Estimated)")
+legend("bottomright",
+       fill=attr(
+         classInt::findColours(
+           classInt::classIntervals(d$POP2020, n=5, style = "quantile"), 
+           rev(RColorBrewer::brewer.pal(7, "RdYlGn"))),"palette"), 
+       cex=1.0,
+       legend=names(attr(
+         classInt::findColours(
+           classInt::classIntervals(d$POP2020, n=5, style = "quantile"), 
+           rev(RColorBrewer::brewer.pal(7, "RdYlGn"))),"table")),bty="n")
+```
+
+```{r}
+lph_tky <- read_csv("egds_data/lph_tky.csv")
+
+lph_tky <- readr::read_csv("egds_data/lph_tky.csv", 
+                           col_types = cols(CODE = "c"),
+                           locale = locale(encoding = "CP932")) 
+lph_tky %>%
+  dplyr::group_by(CODE) %>%
+  dplyr::summarise(LP2018.Mean = mean(LP2018))
+
+tky_bd <- sf::st_read('egds_data/N03-19_13_190101.shp') %>%
+  dplyr::group_by(N03_007) %>%
+  dplyr::summarise(geometry = st_union(geometry)) %>%
+  dplyr::ungroup()
+tky_bd %>%
+  filter(N03_007 %in% c(13101:13123)) -> tky23ku_bd
+
+# Join a shape file and a table
+tky23ku_lph <- dplyr::inner_join(tky23ku_bd, lph_tky, by = c("N03_007" = "CODE"))
+
+plot(tky23ku_lph["LP2018"])
+```
+
+##  日本の新型コロナウイルスの感染状況を都道府県別に示す主題図
+データセットは例示にあったものを用いる。
+```{r, echo=TRUE}
+covid19j <- read.delim("prefectures.csv",
+header=TRUE, sep=",")
+```
+
+本レポートでは、陽性数 /検査数で表される感染率についての主題図を作成する。
+
+```{r}
+covid19j_ <- filter(covid19j,year==2020,month==6,date==14)
+covid19j_$CODE <- 1:47
+covid19j_[is.na(covid19j_)] <- 0
+# 日本の都道府県行政境界データを読み込み
+# →前回授業で使用した地図を利用
+jpn_pref <- sf::st_read("asakura_sp_data/jpn_pref.shp")
+# 地図とデータを連結
+jpn_pref_cov19 <- dplyr::inner_join(jpn_pref, covid19j_, by=c("PREF_CODE"="CODE" ))
+# 主題図の作成
+ggplot2::ggplot(data = jpn_pref_cov19) +
+geom_sf(aes(fill=testedPositive / peopleTested)) +
+scale_fill_distiller(palette="RdYlGn") +
+theme_bw() +
+labs(title = "# of Tested Positiv of Covid19 (2020/05/20)")
+```
